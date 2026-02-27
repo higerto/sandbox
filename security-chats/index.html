@@ -673,9 +673,9 @@
     <span onclick="addReactionToSelected('✅')">✅</span>
 </div>
 
+<script src="token.js"></script>
 <script>
     // ================== НАСТРОЙКИ ==================
-    var GITHUB_TOKEN = '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';   // замените на свой
     var GIST_ID = '06a05c36520ef604f23bbea75fff0679';      // замените на свой
     const FILE_NAME = 'txt';
     const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 МБ после шифрования
@@ -980,7 +980,7 @@
     async function postEncryptedMessage(encryptedText) {
         try {
             const getResp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+                headers: { 'Authorization': `token ${window.GITHUB_TOKEN}` }
             });
             if (!getResp.ok) throw new Error(`GET ${getResp.status}: ${await getResp.text()}`);
             const getData = await getResp.json();
@@ -992,7 +992,7 @@
             const patchResp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
                 method: 'PATCH',
                 headers: {
-                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Authorization': `token ${window.GITHUB_TOKEN}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -1013,7 +1013,7 @@
         const msgDiv = document.getElementById('messages');
         try {
             const response = await fetch(`https://api.github.com/gists/${GIST_ID}?t=${Date.now()}`, {
-                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+                headers: { 'Authorization': `token ${window.GITHUB_TOKEN}` }
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
@@ -1216,7 +1216,7 @@
     async function updateMessageInGist(updatedMsg) {
         try {
             const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+                headers: { 'Authorization': `token ${window.GITHUB_TOKEN}` }
             });
             if (!response.ok) throw new Error(`GET ${response.status}`);
             const data = await response.json();
@@ -1251,7 +1251,7 @@
             const patchResp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
                 method: 'PATCH',
                 headers: {
-                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Authorization': `token ${window.GITHUB_TOKEN}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -1300,7 +1300,7 @@
             await fetch(`https://api.github.com/gists/${GIST_ID}`, {
                 method: 'PATCH',
                 headers: {
-                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Authorization': `token ${window.GITHUB_TOKEN}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -1317,7 +1317,7 @@
     async function exportChat() {
         try {
             const response = await fetch(`https://api.github.com/gists/${GIST_ID}?t=${Date.now()}`, {
-                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+                headers: { 'Authorization': `token ${window.GITHUB_TOKEN}` }
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
@@ -1387,4 +1387,5 @@
 
 </body>
 </html>
+
 
