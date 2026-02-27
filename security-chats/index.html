@@ -546,7 +546,7 @@
 
 <div id="login-screen">
     <h2>Security Chats</h2>
-    <input type="text" id="userName" placeholder="Username: ">
+    <input type="text" id="userName" placeholder="User name: ">
     <input type="password" id="seedPhrase" placeholder="Chat key: ">
     <button onclick="enterChat()">Enter the chat</button>
 </div>
@@ -675,7 +675,8 @@
 
 <script>
     // ================== НАСТРОЙКИ ==================
-    var GIST_ID = '013a4b41a45928c48a0361d5e8230ae6';      // замените на свой
+    var GITHUB_TOKEN = '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';   // замените на свой
+    var GIST_ID = '06a05c36520ef604f23bbea75fff0679';      // замените на свой
     const FILE_NAME = 'txt';
     const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 МБ после шифрования
 
@@ -975,58 +976,87 @@
         });
     }
 
-	// ================== ОТПРАВКА В GITHUB ACTIONS ==================
-	async function postEncryptedMessage(encryptedText) {
-		const payload = { event_type: 'post_message', client_payload: { encrypted: encryptedText } };
-		await fetch('https://api.github.com/repos/higerto/sandbox/dispatches', {
-			method: 'POST',
-			headers: { 'Accept': 'application/vnd.github+json' },
-			body: JSON.stringify(payload)
-		});
-	}
+    // ================== ОТПРАВКА В GIST ==================
+    async function postEncryptedMessage(encryptedText) {
+        try {
+            const getResp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+            });
+            if (!getResp.ok) throw new Error(`GET ${getResp.status}: ${await getResp.text()}`);
+            const getData = await getResp.json();
 
-	// ================== ЗАГРУЗКА СООБЩЕНИЙ ==================
-	async function loadMessages() {
-		const msgDiv = document.getElementById('messages');
-		try {
-			const response = await fetch(`https://api.github.com/gists/${GIST_ID}?t=${Date.now()}`);
-			if (!response.ok) throw new Error(`HTTP ${response.status}`);
-			const data = await response.json();
-			const files = data.files;
-			const messages = [];
-			for (let name in files) {
-				if (!name.startsWith("msg_")) continue;
-				const encrypted = files[name].content;
-				try {
-					const bytes = CryptoJS.AES.decrypt(encrypted, currentSeed);
-					const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-					if (decrypted) {
-						const msg = JSON.parse(decrypted);
-						if (!msg.reactions) msg.reactions = [];
-						messages.push(msg);
-					}
-				} catch (e) {}
-			}
-			messages.sort((a, b) => (a.time || 0) - (b.time || 0));
-			msgDiv.innerHTML = '';
-			let lastDate = null;
-			for (let msg of messages) {
-				const msgDate = msg.time ? new Date(msg.time).toLocaleDateString() : null;
-				if (msgDate && msgDate !== lastDate) {
-					lastDate = msgDate;
-					const divider = document.createElement('div');
-					divider.className = 'date-divider';
-					divider.innerHTML = `<span>${msgDate}</span>`;
-					msgDiv.appendChild(divider);
-				}
-				displayMessage(msg, msgDiv);
-			}
-			msgDiv.scrollTop = msgDiv.scrollHeight;
-		} catch (err) {
-			console.error('Ошибка загрузки:', err);
-			msgDiv.innerHTML = '<center>Ошибка загрузки</center>';
-		}
-	}
+            const oldContent = getData.files[FILE_NAME]?.content || '';
+            const separator = oldContent && !oldContent.endsWith('\n') ? '\n' : '';
+            const newContent = oldContent + separator + encryptedText;
+
+            const patchResp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    files: { [FILE_NAME]: { content: newContent } }
+                })
+            });
+            if (!patchResp.ok) throw new Error(`PATCH ${patchResp.status}: ${await patchResp.text()}`);
+
+            loadMessages();
+        } catch (err) {
+            console.error('Ошибка отправки:', err);
+            alert('Ошибка отправки: ' + err.message);
+        }
+    }
+
+    // ================== ЗАГРУЗКА СООБЩЕНИЙ ==================
+    async function loadMessages() {
+        const msgDiv = document.getElementById('messages');
+        try {
+            const response = await fetch(`https://api.github.com/gists/${GIST_ID}?t=${Date.now()}`, {
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            
+            const content = data.files[FILE_NAME]?.content || '';
+            const lines = content.split('\n').filter(line => line.trim() !== '');
+            
+            const messages = [];
+            for (let line of lines) {
+                try {
+                    const bytes = CryptoJS.AES.decrypt(line, currentSeed);
+                    const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+                    if (decrypted) {
+                        const msg = JSON.parse(decrypted);
+                        if (!msg.reactions) msg.reactions = [];
+                        messages.push(msg);
+                    }
+                } catch (e) {}
+            }
+
+            messages.sort((a, b) => (a.time || 0) - (b.time || 0));
+
+            msgDiv.innerHTML = '';
+            let lastDate = null;
+
+            for (let msg of messages) {
+                const msgDate = msg.time ? new Date(msg.time).toLocaleDateString() : null;
+                if (msgDate && msgDate !== lastDate) {
+                    lastDate = msgDate;
+                    const divider = document.createElement('div');
+                    divider.className = 'date-divider';
+                    divider.innerHTML = `<span>${msgDate}</span>`;
+                    msgDiv.appendChild(divider);
+                }
+                displayMessage(msg, msgDiv);
+            }
+
+            msgDiv.scrollTop = msgDiv.scrollHeight;
+        } catch (err) {
+            console.error('Ошибка загрузки:', err);
+            msgDiv.innerHTML = '<center>Ошибка загрузки</center>';
+        }
+    }
 
     // ================== ОТРИСОВКА СООБЩЕНИЯ ==================
     function displayMessage(msg, container) {
@@ -1183,25 +1213,59 @@
         selectedMsg = null;
     }
 
-	// ================== ОБНОВЛЕНИЕ СООБЩЕНИЯ (реакции) ==================
-	async function updateMessageInGist(updatedMsg) {
-		try {
-			// workflow будет проверять time+user и обновлять в Gist
-			const payload = {
-				event_type: 'update_message',
-				client_payload: { message: updatedMsg }
-			};
-			await fetch('https://api.github.com/repos/higerto/sandbox/dispatches', {
-				method: 'POST',
-				headers: { 'Accept': 'application/vnd.github+json' },
-				body: JSON.stringify(payload)
-			});
-			loadMessages();
-		} catch (err) {
-			console.error('Ошибка обновления сообщения:', err);
-			alert('Не удалось обновить реакцию');
-		}
-	}
+    async function updateMessageInGist(updatedMsg) {
+        try {
+            const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+            });
+            if (!response.ok) throw new Error(`GET ${response.status}`);
+            const data = await response.json();
+            const content = data.files[FILE_NAME]?.content || '';
+            const lines = content.split('\n').filter(line => line.trim() !== '');
+
+            const messages = [];
+            for (let line of lines) {
+                try {
+                    const bytes = CryptoJS.AES.decrypt(line, currentSeed);
+                    const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+                    if (decrypted) {
+                        const msg = JSON.parse(decrypted);
+                        messages.push(msg);
+                    }
+                } catch (e) {}
+            }
+
+            const index = messages.findIndex(m => m.time === updatedMsg.time && m.user === updatedMsg.user);
+            if (index === -1) return;
+
+            messages[index] = updatedMsg;
+
+            const newLines = [];
+            for (let msg of messages) {
+                const jsonStr = JSON.stringify(msg);
+                const encrypted = CryptoJS.AES.encrypt(jsonStr, currentSeed).toString();
+                newLines.push(encrypted);
+            }
+            const newContent = newLines.join('\n');
+
+            const patchResp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    files: { [FILE_NAME]: { content: newContent } }
+                })
+            });
+            if (!patchResp.ok) throw new Error(`PATCH ${patchResp.status}`);
+
+            loadMessages();
+        } catch (err) {
+            console.error('Ошибка обновления сообщения:', err);
+            alert('Не удалось обновить реакцию');
+        }
+    }
 
     // ================== ЭМОДЗИ (ввод) ==================
     function toggleEmojiPanel() {
@@ -1229,26 +1293,32 @@
         }
     });
 
-	// ================== СБРОС ЧАТА ==================
-	async function resetChat() {
-		if (!confirm('Очистить чат?')) return;
-		try {
-			await fetch('https://api.github.com/repos/higerto/sandbox/dispatches', {
-				method: 'POST',
-				headers: { 'Accept': 'application/vnd.github+json' },
-				body: JSON.stringify({ event_type: 'reset_chat' })
-			});
-			loadMessages();
-		} catch (err) {
-			console.error('Ошибка сброса чата:', err);
-			alert('Не удалось очистить чат');
-		}
-	}
+    // ================== СБРОС ЧАТА ==================
+    async function resetChat() {
+        if (!confirm('Вы уверены, что хотите очистить чат? Это необратимо.')) return;
+        try {
+            await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    files: { [FILE_NAME]: { content: '' } }
+                })
+            });
+            loadMessages();
+        } catch (err) {
+            alert('Ошибка очистки');
+        }
+    }
 
     // ================== ЭКСПОРТ ИСТОРИИ ==================
     async function exportChat() {
         try {
-            const response = await fetch(`https://api.github.com/gists/${GIST_ID}?t=${Date.now()}`);
+            const response = await fetch(`https://api.github.com/gists/${GIST_ID}?t=${Date.now()}`, {
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+            });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             const content = data.files[FILE_NAME]?.content || '';
@@ -1305,7 +1375,7 @@
         document.getElementById('display-name').innerText = currentUser;
 
         if (refreshInterval) clearInterval(refreshInterval);
-        refreshInterval = setInterval(loadMessages, 3000);
+        refreshInterval = setInterval(loadMessages, 10000);
         
         loadMessages();
     }
