@@ -978,22 +978,20 @@
 	// ================== ОТПРАВКА В GITHUB ACTIONS ==================
 	async function postEncryptedMessage(encryptedText) {
 		try {
-			// Формируем payload для workflow
 			const payload = {
 				event_type: 'post_message',
 				client_payload: { encrypted: encryptedText }
 			};
+			// workflow будет запускаться через GitHub Actions, токен не нужен в браузере
 			await fetch('https://api.github.com/repos/higerto/sandbox/dispatches', {
 				method: 'POST',
-				headers: {
-					'Accept': 'application/vnd.github+json'
-				},
+				headers: { 'Accept': 'application/vnd.github+json' },
 				body: JSON.stringify(payload)
 			});
 			loadMessages();
 		} catch (err) {
 			console.error('Ошибка отправки:', err);
-			alert('Ошибка отправки: ' + err.message);
+			alert('Сообщение не отправлено: workflow не настроен');
 		}
 	}
 
@@ -1245,7 +1243,7 @@
 	async function resetChat() {
 		if (!confirm('Очистить чат?')) return;
 		try {
-			await fetch('https://api.github.com/repos/ВАШ_ЛОГИН/ВАШ_РЕПОЗИТОРИЙ/dispatches', {
+			await fetch('https://api.github.com/repos/higerto/sandbox/dispatches', {
 				method: 'POST',
 				headers: { 'Accept': 'application/vnd.github+json' },
 				body: JSON.stringify({ event_type: 'reset_chat' })
@@ -1260,9 +1258,7 @@
     // ================== ЭКСПОРТ ИСТОРИИ ==================
     async function exportChat() {
         try {
-            const response = await fetch(`https://api.github.com/gists/${GIST_ID}?t=${Date.now()}`, {
-                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
-            });
+            const response = await fetch(`https://api.github.com/gists/${GIST_ID}?t=${Date.now()}`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             const content = data.files[FILE_NAME]?.content || '';
