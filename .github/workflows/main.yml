@@ -2,19 +2,15 @@ name: chat_gist_handler
 
 on:
   repository_dispatch:
-    types: [post_message]
+    types: [post_message, update_message]
 
 jobs:
-  post:
+  handle-chat:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
-      - name: Post message to Gist
-        uses: devops-infra/action-github-gist@v2
-        with:
-          gist_id: ${{ secrets.GIST_ID }}
-          github_token: ${{ secrets.GH_TOKEN }}
-          file_name: txt
-          content: ${{ github.event.client_payload.encrypted }}
-          append: true
+      - name: Run chat handler
+        run: |
+          node chat-handler.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
