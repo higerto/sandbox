@@ -1,0 +1,97 @@
+name: Chat Gist Handler
+
+on:
+  repository_dispatch:
+    types: [post_message, update_message, reset_chat]
+
+jobs:
+  handle_gist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: |
+          npm install node-fetch@3 js-yaml
+
+      - name: Handle chat events
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node <<'JS'
+          import fs from 'fs';
+          import fetch from 'node-fetch';
+
+          const GIST_ID = process.env.GIST_ID;
+          const TOKEN = process.env.GITHUB_TOKEN;
+          const eventType = process.env.GITHUB_EVENT_TYPE;
+          const payload = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf-8')).client_payload;
+
+          async function getGist() {
+            const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+              headers: { Authorization: `token ${TOKEN}` }
+            });
+            return await res.json();
+          }
+
+          async function updateGist(files) {
+            await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+              method: 'PATCH',
+              headers: { 
+                Authorization: `token ${TOKEN}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ files })
+            });
+          }
+
+          async function main() {
+            const gist = await getGist();
+            const files = gist.files || {};
+
+            if (eventType === 'post_message') {
+              // создаём новый файл msg_<timestamp>
+              const ts = Date.now();
+              files[`msg_${ts}`] = { content: payload.encrypted };
+            }
+            else if (eventType === 'update_message') {
+              const msg = payload.message;
+              // ищем по time + user и обновляем содержимое
+              let found = false;
+              for (let name in files) {
+                try {
+                  const decrypted = msg.time + '|' + msg.user;
+                  // сохраняем в поле content просто как замена
+                  if (name.startsWith('msg_')) {
+                    // тут JS-клиент сам ищет по time+user, workflow просто перезаписывает
+                    const existing = files[name].content;
+                    files[name].content = JSON.stringify(msg.encrypted || msg);
+                    found = true;
+                    break;
+                  }
+                } catch(e) { continue; }
+              }
+              if (!found) {
+                // если не нашли, создаём новый файл
+                files[`msg_${Date.now()}`] = { content: JSON.stringify(msg) };
+              }
+            }
+            else if (eventType === 'reset_chat') {
+              // очищаем все msg_ файлы
+              for (let name in files) {
+                if (name.startsWith('msg_')) files[name].content = '';
+              }
+            }
+
+            await updateGist(files);
+          }
+
+          main().catch(err => { console.error(err); process.exit(1); });
+          JS
