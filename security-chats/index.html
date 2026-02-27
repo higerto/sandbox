@@ -977,22 +977,12 @@
 
 	// ================== ОТПРАВКА В GITHUB ACTIONS ==================
 	async function postEncryptedMessage(encryptedText) {
-		try {
-			const payload = {
-				event_type: 'post_message',
-				client_payload: { encrypted: encryptedText }
-			};
-			// workflow будет запускаться через GitHub Actions, токен не нужен в браузере
-			await fetch('https://api.github.com/repos/higerto/sandbox/dispatches', {
-				method: 'POST',
-				headers: { 'Accept': 'application/vnd.github+json' },
-				body: JSON.stringify(payload)
-			});
-			loadMessages();
-		} catch (err) {
-			console.error('Ошибка отправки:', err);
-			alert('Сообщение не отправлено: workflow не настроен');
-		}
+		const payload = { event_type: 'post_message', client_payload: { encrypted: encryptedText } };
+		await fetch('https://api.github.com/repos/higerto/sandbox/dispatches', {
+			method: 'POST',
+			headers: { 'Accept': 'application/vnd.github+json' },
+			body: JSON.stringify(payload)
+		});
 	}
 
 	// ================== ЗАГРУЗКА СООБЩЕНИЙ ==================
